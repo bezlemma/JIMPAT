@@ -1,35 +1,35 @@
 using ProgressMeter
 
-function stitch_main(image_data, offsets, Fusion_Strategy, Frame_N, base_path,time_range)
+function stitch_main(image_data, offsets, Fusion_Strategy, base_path,time_range,z_range,c_range)
 
 #TODO: Provide a simple average blend
 #TODO: Provide an adfanced carving blend
 
     if Fusion_Strategy == "Feather"
-        mosaic_ref = stitch_timepoint_feather(image_data, offsets, Frame_N, base_path; feather_size=30.0)
+        mosaic_ref = stitch_timepoint_feather(image_data, offsets, 1, base_path; feather_size=30.0)
         (h0, w0) = size(mosaic_ref)
-        stitched_series = Array{Float32,3}(undef, h0, w0, max_t)
-        stitched_series[:, :, Frame_N] = mosaic_ref
+        stitched_series = Array{Float32,3}(undef, h0, w0, lastindex(time_range))
+        stitched_series[:, :, 1] = mosaic_ref
     
         @showprogress @threads for t in time_range
-            if t == Frame_N
-                continue
-            end #Skip the frame we already did
-         #   println("Stitching time point $(t) of $max_t ...")
-            stitched_series[:, :, t] = stitch_timepoint_feather(image_data, offsets, t, base_path; feather_size=30.0)
+            try
+                stitched_series[:, :, t] = stitch_timepoint_feather(image_data, offsets, t, base_path; feather_size=30.0)
+            catch
+                println("$t failed")
+            end
         end
     elseif Fusion_Strategy == "None"
-            mosaic_ref = stitch_timepoint(image_data, offsets, Frame_N, base_path)
+            mosaic_ref = stitch_timepoint(image_data, offsets, 1, base_path)
             (h0, w0) = size(mosaic_ref)
-            stitched_series = Array{Float32,3}(undef, h0, w0, max_t)
-            stitched_series[:, :, Frame_N] = mosaic_ref
+            stitched_series = Array{Float32,3}(undef, h0, w0, lastindex(time_range))
+            stitched_series[:, :, 1] = mosaic_ref
     
             @showprogress @threads for t in time_range
-                if t == Frame_N
-                    continue
-                end #Skip the frame we already did
-          #      println("Stitching time point $(t) of $max_t ...")
-                stitched_series[:, :, t] = stitch_timepoint(image_data, offsets, t, base_path)
+                try
+                    stitched_series[:, :, t] = stitch_timepoint(image_data, offsets, t, base_path)
+                catch
+                    println("$t failed")
+                end
             end
     end
     return stitched_series
