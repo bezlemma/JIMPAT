@@ -126,12 +126,12 @@ println("Length is $paxis_len_mm mm")
 
 ## Save the Final Mask and Channel Data
 #TODO, get this to better interact with imageJ's UInt16 expectations
-# PATH = "./"
-# save(joinpath(PATH, "newseg.tif"), BINARY_DATA)
-# save(joinpath(PATH, "newdata_CH1.tif"), NEW_CH1)
-# save(joinpath(PATH, "newdata_CH2.tif"), NEW_CH2)
-# save(joinpath(PATH, "newdata_CH3.tif"), NEW_CH3)
-# save(joinpath(PATH, "newdata_CH4.tif"), NEW_CH4)
+ PATH = "./"
+ save(joinpath(PATH, "newseg.tif"), BINARY_DATA)
+ save(joinpath(PATH, "newdata_CH1.tif"), NEW_CH1)
+ save(joinpath(PATH, "newdata_CH2.tif"), NEW_CH2)
+ save(joinpath(PATH, "newdata_CH3.tif"), NEW_CH3)
+ save(joinpath(PATH, "newdata_CH4.tif"), NEW_CH4)
 
 # println("Processing complete. Files saved to $PATH")
 
