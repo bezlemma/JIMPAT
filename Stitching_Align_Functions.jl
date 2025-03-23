@@ -1,20 +1,36 @@
+# function tile_using_positions(image_data, bin_factor)
+#     time_index=0
+#     valid_tiles = [tile for tile in image_data if
+#         tile["grid_row"] !== missing &&
+#         tile["grid_col"] !== missing &&
+#         haskey(tile["tiff_files"], time_index)]
+
+#     offsets = Dict{Any,Tuple{Float64,Float64}}()
+#     for tile in valid_tiles
+#         px = (tile["position_x"] === missing) ? 0.0 : tile["position_x"]
+#         py = (tile["position_y"] === missing) ? 0.0 : tile["position_y"]
+#         # Adjust for bin_factor
+#         offsets[tile] = (px / bin_factor, py / bin_factor)
+#     end
+
+#     return offsets
+# end
+
 function tile_using_positions(image_data, bin_factor)
-    time_index=0
-    valid_tiles = [
-        tile for tile in image_data if
-        tile["grid_row"] !== missing &&
-        tile["grid_col"] !== missing &&
-        haskey(tile["tiff_files"], time_index)
-    ]
-
-    offsets = Dict{Any,Tuple{Float64,Float64}}()
-    for tile in valid_tiles
-        px = (tile["position_x"] === missing) ? 0.0 : tile["position_x"]
-        py = (tile["position_y"] === missing) ? 0.0 : tile["position_y"]
-        # Adjust for bin_factor
-        offsets[tile] = (px / bin_factor, py / bin_factor)
+    offsets = Dict{Any,Dict{Tuple{Int,Int,Int}, Tuple{Float64,Float64}}}()
+    for tile in image_data
+        tile_offset_map = Dict{Tuple{Int,Int,Int}, Tuple{Float64,Float64}}()
+        if haskey(tile, "plane_positions")
+            for (key, (px, py)) in tile["plane_positions"]
+                tile_offset_map[key] = (px/bin_factor, py/bin_factor)
+            end
+        else
+            px = tile["position_x"] === missing ? 0.0 : tile["position_x"]
+            py = tile["position_y"] === missing ? 0.0 : tile["position_y"]
+            tile_offset_map[(0, 0, 0)] = (px/bin_factor, py/bin_factor)
+        end
+        offsets[tile] = tile_offset_map
     end
-
     return offsets
 end
 
@@ -99,7 +115,6 @@ function overlap_subimages(imA::Matrix{UInt16}, imB::Matrix{UInt16};
     end
 end
 
-# ---------------------- find_pairwise_offset ----------------------
 function find_pairwise_offset(imA::Matrix{UInt16}, imB::Matrix{UInt16})
     A = Float32.(imA)
     B = Float32.(imB)
@@ -198,5 +213,3 @@ function refine_offsets(valid_tiles, tile_images, initial_offsets;
 
     return refined
 end
-
-# ---------------------- align_tiles_reference_timepoint ----------------------

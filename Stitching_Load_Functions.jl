@@ -73,11 +73,11 @@ function parse_ome_companion(file_path::String)
 end
 
 
-function load_and_bin(path::String; bin_factor::Int=2)
+function load_and_bin(path::String; b_factor::Int=1)
     plane = TiffImages.load(path)
-    if bin_factor == 1
+    if b_factor == 1
         return plane
-    elseif bin_factor == 4
+    elseif b_factor == 4
         return bin4(plane)
     else
         return bin2(plane)

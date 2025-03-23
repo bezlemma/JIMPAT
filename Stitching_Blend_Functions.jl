@@ -1,6 +1,7 @@
 using ProgressMeter
 
-function stitch_main(image_data, offsets, Fusion_Strategy, base_path,time_range,z_range,c_range)
+function stitch_main(image_data, offsets, Fusion_Strategy, base_path,
+    time_range, z_range, c_range)
 
 #TODO: Provide a simple average blend
 #TODO: Provide an adfanced carving blend
@@ -19,14 +20,15 @@ function stitch_main(image_data, offsets, Fusion_Strategy, base_path,time_range,
             end
         end
     elseif Fusion_Strategy == "None"
-            mosaic_ref = stitch_timepoint(image_data, offsets, 1, base_path)
+            mosaic_ref = stitch_plane(image_data, offsets, base_path; time_index=0, z_index=0, c_index=0, b_factor=bin_factor)
             (h0, w0) = size(mosaic_ref)
             stitched_series = Array{Float32,3}(undef, h0, w0, lastindex(time_range))
             stitched_series[:, :, 1] = mosaic_ref
     
-            @showprogress @threads for t in time_range
+            @showprogress for t in time_range, z in z_range, c in c_range
                 try
-                    stitched_series[:, :, t] = stitch_timepoint(image_data, offsets, t, base_path)
+                    println("$t")
+                    stitched_series[:, :, t] = stitch_plane(image_data, offsets, base_path; time_index=t, z_index=z, c_index=c, b_factor=bin_factor)
                 catch
                     println("$t failed")
                 end
@@ -134,37 +136,109 @@ function stitch_timepoint_feather(image_data, offsets, time_index::Int, base_pat
     return canvas
 end
 
-function stitch_timepoint(image_data, offsets, time_index::Int, base_path::String)
-    relevant_tiles = [img for img in image_data if haskey(offsets, img)]
-    xvals = Float64[]; yvals = Float64[]
+# old version
+# function stitch_timepoint(image_data, offsets, time_index::Int, base_path::String)
+#     relevant_tiles = [img for img in image_data if haskey(offsets, img)]
+#     xvals = Float64[]; yvals = Float64[]
 
+#     tile_images = Dict{Any,Matrix{Float32}}()
+
+#     for tile in relevant_tiles
+#         fname = tile["tiff_files"][time_index]
+#         path = get_file_path(base_path, fname)
+#         tile_im = load_and_bin(path)
+#         tile_images[tile] = tile_im
+#         (ox, oy) = offsets[tile]
+#         h_tile, w_tile = size(tile_im)
+#         push!(xvals, ox, ox + w_tile - 1)
+#         push!(yvals, oy, oy + h_tile - 1)
+#     end
+#     min_x = floor(Int, minimum(xvals))
+#     max_x = ceil(Int, maximum(xvals))
+#     min_y = floor(Int, minimum(yvals))
+#     max_y = ceil(Int, maximum(yvals))
+#     width = max_x - min_x + 1
+#     height = max_y - min_y + 1
+
+#     canvas = fill(Float32(0), height, width)
+
+#     for tile in relevant_tiles
+#         im = tile_images[tile]
+#         (ox, oy) = offsets[tile]
+#         ox_i = round(Int, ox) - min_x + 1
+#         oy_i = round(Int, oy) - min_y + 1
+#         h_tile, w_tile = size(im)
+#         canvas[oy_i:oy_i+h_tile-1, ox_i:ox_i+w_tile-1] = im
+#     end
+#     return canvas
+# end
+
+# new version that we are trying to get to work
+function stitch_plane(image_data, offsets, base_path::String; time_index::Int=1, z_index::Int=1,
+    c_index::Int=1, b_factor::Int=1)
+    # 1) Identify tiles that have an offset
+    #    (If your logic needs to exclude some tiles, adapt here)
+    relevant_tiles = [tile for tile in image_data if haskey(offsets, tile)]
+    if isempty(relevant_tiles)
+        @warn "No tiles found in offsets that match"
+        return fill(Float32(0), 1, 1)
+    end
+
+    # 2) Prepare placeholders
     tile_images = Dict{Any,Matrix{Float32}}()
+    xvals = Float64[]
+    yvals = Float64[]
 
+    # 3) Load and place each tile
     for tile in relevant_tiles
-        fname = tile["tiff_files"][time_index]
+        # (A) Figure out which file to open
+        #     If each tile has a single file for all planes, e.g.:
+        fname = tile["tiff_files"][time_index]  
+        # or if you store one file for each (t,z,c), do something like:
+        # fname = tile["tiff_files"][(time_index, z_index, channel_index)]
+        # Adjust to match your actual data structure.
+
         path = get_file_path(base_path, fname)
-        tile_im = load_and_bin(path)
+
+        # (B) Load the correct plane from the TIF
+        #     e.g. if it's a multi-plane TIF, do:
+        tile_im = load_and_bin(path; 
+            b_factor=b_factor
+        )
+        # If your load_and_bin only takes `time_index`, you’ll need
+        # to add arguments for z_index, channel_index inside that function.
 
         tile_images[tile] = tile_im
 
-        (ox, oy) = offsets[tile]
+        # (C) Offsets (ox, oy): same for all planes, unless you store them per-plane
+        (ox, oy) = offsets[tile][(0,0,0)]
+
+        # (D) Update bounding box
         h_tile, w_tile = size(tile_im)
         push!(xvals, ox, ox + w_tile - 1)
         push!(yvals, oy, oy + h_tile - 1)
     end
+
+    # 4) If no bounding box found, return trivial
+    if isempty(xvals)
+        return fill(Float32(0), 1, 1)
+    end
+
+    # 5) Compute bounding box
     min_x = floor(Int, minimum(xvals))
     max_x = ceil(Int, maximum(xvals))
     min_y = floor(Int, minimum(yvals))
     max_y = ceil(Int, maximum(yvals))
-    width = max_x - min_x + 1
+    width  = max_x - min_x + 1
     height = max_y - min_y + 1
 
+    # 6) Allocate the stitched canvas
     canvas = fill(Float32(0), height, width)
 
-    # 4) Place each tile on the canvas by overwriting
+    # 7) Overwrite each tile in the canvas
     for tile in relevant_tiles
         im = tile_images[tile]
-        (ox, oy) = offsets[tile]
+        (ox, oy) = offsets[tile][(0,0,0)]
 
         ox_i = round(Int, ox) - min_x + 1
         oy_i = round(Int, oy) - min_y + 1
@@ -172,5 +246,7 @@ function stitch_timepoint(image_data, offsets, time_index::Int, base_path::Strin
         h_tile, w_tile = size(im)
         canvas[oy_i:oy_i+h_tile-1, ox_i:ox_i+w_tile-1] = im
     end
+
     return canvas
 end
+
