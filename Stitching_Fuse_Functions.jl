@@ -10,10 +10,7 @@ function fuse_main(
     metadata_size_c::Int, metadata_size_z::Int, metadata_size_t::Int,
     feather_blend_size::Float64)
 
-    println("Starting stitching process...")
     num_c, num_z, num_t = length(c_range), length(z_range), length(time_range)
-    println("Stitching Dimensions: C=$num_c, Z=$num_z, T=$num_t (using $(Threads.nthreads()) threads)")
-    println("Metadata Dimensions: C=$(metadata_size_c), Z=$(metadata_size_z), T=$(metadata_size_t)")
     println("Bin Factor: $bin_factor")
     println("Fusion Strategy: $Fusion_Strategy")
     if Fusion_Strategy == "Feather"
@@ -28,23 +25,14 @@ function fuse_main(
     println("Stitching reference plane (C=$first_c, Z=$first_z, T=$first_t) to determine size...")
     local mosaic_ref
     local h0, w0
-    try
-        stitch_func = Fusion_Strategy == "Feather" ? stitch_plane_feather : stitch_plane
-        kwargs = Fusion_Strategy == "Feather" ? (; feather_size=feather_blend_size) : (;)
-        mosaic_ref = stitch_func(image_data, offsets, base_path; c_index=first_c, z_index=first_z, time_index=first_t, b_factor=bin_factor, kwargs...)
-        if isempty(mosaic_ref) || size(mosaic_ref) == (1, 1) && all(mosaic_ref .== 0.0f0)
-            println("Error: Ref plane stitching failed.")
-            return Array{Float32,5}(undef, 0, 0, 0, 0, 0)
-        end
-        (h0, w0) = size(mosaic_ref)
-        println("Determined stitched size: Height=$h0, Width=$w0")
-    catch e
-        println("Error stitching reference plane:")
-        showerror(stdout, e)
-        println()
-        println("Cannot proceed.")
+    stitch_func = Fusion_Strategy == "Feather" ? stitch_plane_feather : stitch_plane
+    kwargs = Fusion_Strategy == "Feather" ? (; feather_size=feather_blend_size) : (;)
+    mosaic_ref = stitch_func(image_data, offsets, base_path; c_index=first_c, z_index=first_z, time_index=first_t, b_factor=bin_factor, kwargs...)
+    if isempty(mosaic_ref) || size(mosaic_ref) == (1, 1) && all(mosaic_ref .== 0.0f0)
+        println("Error: Ref plane stitching failed.")
         return Array{Float32,5}(undef, 0, 0, 0, 0, 0)
     end
+    (h0, w0) = size(mosaic_ref)
 
     stitched_series = Array{Float32,5}(undef, h0, w0, num_c, num_z, num_t)
     println("Allocated 5D output array: ($h0, $w0, $num_c, $num_z, $num_t)")
@@ -58,7 +46,6 @@ function fuse_main(
         mosaic_ref = nothing
     end
 
-    println("Starting parallel stitching of all planes...")
     @showprogress @threads for idx in CartesianIndices((num_c, num_z, num_t))
         ci, zi, ti = Tuple(idx) # Get 1-based indices for output array
 

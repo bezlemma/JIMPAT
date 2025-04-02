@@ -44,7 +44,7 @@ function parse_range_input_gui(input_str::AbstractString, max_val::Int, dim_name
             end_val = parse(Int, parts[2])
 
             if start_val > end_val
-                 return "Start value $start_val cannot be greater than end value $end_val for $dim_name."
+                return "Start value $start_val cannot be greater than end value $end_val for $dim_name."
             end
             if 1 <= start_val <= max_val && 1 <= end_val <= max_val
                 return start_val:end_val
@@ -73,7 +73,7 @@ or `nothing` if Cancel is clicked or the window is closed.
 """
 function prompt_for_ranges_gui(max_t::Int, max_z::Int, max_c::Int)
     # Channel to signal completion and pass back results from the GUI callback
-    result_channel = Channel{Union{Tuple{UnitRange, UnitRange, UnitRange}, Nothing}}(1)
+    result_channel = Channel{Union{Tuple{UnitRange,UnitRange,UnitRange},Nothing}}(1)
 
     # Initialize LibUI event loop on the main thread if not already running
     # LibUI.jl handles this internally now, usually don't need manual init/quit
@@ -87,10 +87,10 @@ function prompt_for_ranges_gui(max_t::Int, max_z::Int, max_c::Int)
             # Check if channel is still open before trying to put!
             # Check isempty to ensure we dont overwrite a value already put by OK/Cancel
             if isopen(result_channel) && isempty(result_channel)
-                 put!(result_channel, nothing) # Signal cancellation
+                put!(result_channel, nothing) # Signal cancellation
             end
         catch e
-             @warn "Error putting nothing to channel on window close: $e"
+            @warn "Error putting nothing to channel on window close: $e"
         end
         LibUI.destroy(win) # Ensure window resources are freed
         # If LibUI.main() was started manually, might need LibUI.quit() here or after take!
@@ -163,28 +163,28 @@ function prompt_for_ranges_gui(max_t::Int, max_z::Int, max_c::Int)
             LibUI.msgbox_error(win, "Input Error", error_message)
         else
             # All results are valid ranges
-             println("Ranges accepted: T=$(t_result), Z=$(z_result), C=$(c_result)")
-             try
+            println("Ranges accepted: T=$(t_result), Z=$(z_result), C=$(c_result)")
+            try
                 if isopen(result_channel) && isempty(result_channel)
-                     put!(result_channel, (t_result, z_result, c_result))
-                 end
-             catch e
-                 @warn "Error putting result tuple to channel on OK: $e"
-             end
-             LibUI.destroy(win) # Close the window
-             # If LibUI.main() was started manually, might need LibUI.quit()
+                    put!(result_channel, (t_result, z_result, c_result))
+                end
+            catch e
+                @warn "Error putting result tuple to channel on OK: $e"
+            end
+            LibUI.destroy(win) # Close the window
+            # If LibUI.main() was started manually, might need LibUI.quit()
         end
     end
 
     LibUI.on_clicked(cancel_button) do btn
         println("Cancel button clicked.")
-         try
-             if isopen(result_channel) && isempty(result_channel)
-                 put!(result_channel, nothing) # Signal cancellation
-             end
-         catch e
-              @warn "Error putting nothing to channel on Cancel: $e"
-         end
+        try
+            if isopen(result_channel) && isempty(result_channel)
+                put!(result_channel, nothing) # Signal cancellation
+            end
+        catch e
+            @warn "Error putting nothing to channel on Cancel: $e"
+        end
         LibUI.destroy(win) # Close the window
         # If LibUI.main() was started manually, might need LibUI.quit()
     end
@@ -243,11 +243,11 @@ function main(companion_file::String, time_range::AbstractRange, z_range::Abstra
         println("Error: Provided Time range ($(time_range)) is outside the valid metadata range (1:$(metadata_size_t)).")
         return
     end
-     if maximum(z_range) > metadata_size_z || minimum(z_range) < 1
+    if maximum(z_range) > metadata_size_z || minimum(z_range) < 1
         println("Error: Provided Z range ($(z_range)) is outside the valid metadata range (1:$(metadata_size_z)).")
         return
     end
-     if maximum(c_range) > metadata_size_c || minimum(c_range) < 1
+    if maximum(c_range) > metadata_size_c || minimum(c_range) < 1
         println("Error: Provided Channel range ($(c_range)) is outside the valid metadata range (1:$(metadata_size_c)).")
         return
     end
@@ -259,74 +259,26 @@ function main(companion_file::String, time_range::AbstractRange, z_range::Abstra
     Fusion_Strategy = "None"
     feather_blend_size = 30.0
 
-    println("\nCalculating tile offsets...")
-    # ... (Offset calculation logic remains the same)
     offsets = tile_using_positions(image_data, bin_factor)
-    if isempty(offsets)
-        println("Error: No offsets could be calculated.")
-        return
-    end
     println("Calculated offsets for $(length(offsets)) tiles.")
 
     println("\nStarting fusion process...")
-    # ... (Fusion logic remains the same)
     stitched_series = fuse_main(image_data, offsets, Fusion_Strategy, base_path,
-                                c_range, z_range, time_range, bin_factor,
-                                metadata_size_c, metadata_size_z, metadata_size_t,
-                                feather_blend_size)
-    if isempty(stitched_series) || all(size(stitched_series) .== 0)
-        println("Error: Stitching returned an empty or zero-sized result.")
-        return
-    end
-    println("Stitching successful. Result dimensions: ", size(stitched_series))
+        c_range, z_range, time_range, bin_factor,
+        metadata_size_c, metadata_size_z, metadata_size_t,
+        feather_blend_size)
 
-
-    # --- Saving Code (Filename includes ranges) ---
+    # --- Saving Code  ---
     binned_str = bin_factor > 1 ? "_binned$(bin_factor)x" : ""
     fusion_str = Fusion_Strategy != "None" ? "_$(lowercase(Fusion_Strategy))" : ""
-    range_str = "_T$(first(time_range))-$(last(time_range))_Z$(first(z_range))-$(last(z_range))_C$(first(c_range))-$(last(c_range))"
-    range_str = replace(range_str, ":" => "-") # Sanitize for filename
-    output_filename_base = replace(basename(companion_file), r"(\.companion)?\.ome$"i => "")
-    output_filename = output_filename_base * "_stitched" * range_str * "$(binned_str)$(fusion_str).tif"
+    output_filename = replace(basename(companion_file), r"(\.companion)?\.ome$"i => "") * "_stitched$(binned_str)$(fusion_str).tif"
     output_file = joinpath(base_path, output_filename)
-
-    println("\nPreparing to save stitched 5D array...")
-    println("Output file: $output_file")
-
-    # ... (Data conversion and saving logic remains the same)
-    println("Converting data to UInt16...")
-    try
-        # (Existing conversion logic based on eltype)
-        if eltype(stitched_series) == Float32 || eltype(stitched_series) == Float64
-             epsilon = 1f-6
-             stitched_16 = round.(UInt16, clamp.(stitched_series .+ epsilon, 0.0f0, 1.0f0) .* 65535.0f0)
-        elseif eltype(stitched_series) == UInt16
-            println("Data is already UInt16. Skipping conversion.")
-            stitched_16 = stitched_series
-        elseif eltype(stitched_series) == UInt8
-             println("Data is UInt8. Scaling to UInt16.")
-             stitched_16 = UInt16.(stitched_series) .* (65535 ÷ 255)
-        else
-            println("Warning: Unexpected data type ($(eltype(stitched_series))). Attempting direct conversion to UInt16.")
-            stitched_16 = UInt16.(round.(clamp.(stitched_series, typemin(UInt16), typemax(UInt16))))
-        end
-
-        println("Saving Tiff file...")
-        TiffSaver.SaveTiffPlz(output_file, stitched_16)
-        println("Saving complete.")
-
-    catch e
-        println("\nError during data conversion or saving:")
-        showerror(stdout, e)
-        println()
-        return
-    end
-
-    println("\n--- Stitching Process Done ---")
+    println("Saving stitched 5D array to: $output_file")
+    stitched_16 = clamp.(stitched_series, 0.0f0, 1.0f0) .* 65535.0f0
+    stitched_16 = round.(UInt16, stitched_16)
+    TiffSaver.SaveTiffPlz(output_file, stitched_16)
 end
 
-# --- Version of main with only companion file (uses default ranges - UNCHANGED) ---
-# This function remains the same as in the previous version
 function main(companion_file::String)
     println("--- Starting Stitching Process (Default Ranges) ---")
     println("Using Companion File: ", companion_file)
@@ -366,32 +318,32 @@ Returns a tuple `(t_range, z_range, c_range)` if OK is clicked and parsing succe
 or `nothing` if Cancel/Close is clicked.
 """
 function prompt_for_ranges_makie(max_t::Int, max_z::Int, max_c::Int)
-    result_channel = Channel{Union{Tuple{UnitRange, UnitRange, UnitRange}, Nothing}}(1)
+    result_channel = Channel{Union{Tuple{UnitRange,UnitRange,UnitRange},Nothing}}(1)
 
     # Set up the Makie figure and layout
-    fig = Figure(size = (400, 250), title = "Select Processing Ranges")
+    fig = Figure(size=(400, 250), title="Select Processing Ranges")
     gl = fig[1, 1] = GridLayout()
 
     # Add Labels and Textboxes using Makie widgets
-    label_t = Label(gl[1, 1], "Time (T) Range [1:$max_t]:", halign = :right)
-    box_t = Textbox(gl[1, 2], placeholder = "1:$max_t", width = 150) # Use placeholder or set_text
+    label_t = Label(gl[1, 1], "Time (T) Range [1:$max_t]:", halign=:right)
+    box_t = Textbox(gl[1, 2], placeholder="1:$max_t", width=150) # Use placeholder or set_text
     box_t.stored_string[] = "1:$max_t" # Set initial text
 
-    label_z = Label(gl[2, 1], "Z Range [1:$max_z]:", halign = :right)
-    box_z = Textbox(gl[2, 2], placeholder = "1:$max_z", width = 150)
+    label_z = Label(gl[2, 1], "Z Range [1:$max_z]:", halign=:right)
+    box_z = Textbox(gl[2, 2], placeholder="1:$max_z", width=150)
     box_z.stored_string[] = "1:$max_z"
 
-    label_c = Label(gl[3, 1], "Channel (C) Range [1:$max_c]:", halign = :right)
-    box_c = Textbox(gl[3, 2], placeholder = "1:$max_c", width = 150)
+    label_c = Label(gl[3, 1], "Channel (C) Range [1:$max_c]:", halign=:right)
+    box_c = Textbox(gl[3, 2], placeholder="1:$max_c", width=150)
     box_c.stored_string[] = "1:$max_c"
 
     # Error message label (initially empty)
-    error_label = Label(gl[4, 1:2], "", color = :red, tellwidth=false)
+    error_label = Label(gl[4, 1:2], "", color=:red, tellwidth=false)
 
     # OK and Cancel Buttons
     button_layout = gl[5, 1:2] = GridLayout()
-    ok_button = Button(button_layout[1, 1], label = "OK", width = 100)
-    cancel_button = Button(button_layout[1, 2], label = "Cancel", width = 100)
+    ok_button = Button(button_layout[1, 1], label="OK", width=100)
+    cancel_button = Button(button_layout[1, 2], label="Cancel", width=100)
 
     # --- Callbacks ---
     on(ok_button.clicks) do _
@@ -414,30 +366,30 @@ function prompt_for_ranges_makie(max_t::Int, max_z::Int, max_c::Int)
             error_label.text = "" # Clear any previous error message
             println("Ranges accepted: T=$(t_result), Z=$(z_result), C=$(c_result)")
             try
-                 # Ensure channel is open and empty before putting result
-                 if isopen(result_channel) && isempty(result_channel)
-                     put!(result_channel, (t_result, z_result, c_result))
-                 end
-                 # Close the window - get the screen and close it
-                 screen = GLMakie.Screen(fig.scene)
-                 close(screen)
+                # Ensure channel is open and empty before putting result
+                if isopen(result_channel) && isempty(result_channel)
+                    put!(result_channel, (t_result, z_result, c_result))
+                end
+                # Close the window - get the screen and close it
+                screen = GLMakie.Screen(fig.scene)
+                close(screen)
             catch e
-                 @warn "Error putting result or closing window on OK: $e"
+                @warn "Error putting result or closing window on OK: $e"
             end
         end
     end
 
     on(cancel_button.clicks) do _
-         println("Cancel button clicked.")
-         try
-             if isopen(result_channel) && isempty(result_channel)
-                 put!(result_channel, nothing)
-             end
-             screen = GLMakie.Screen(fig.scene)
-             close(screen)
-         catch e
-              @warn "Error putting nothing or closing window on Cancel: $e"
-         end
+        println("Cancel button clicked.")
+        try
+            if isopen(result_channel) && isempty(result_channel)
+                put!(result_channel, nothing)
+            end
+            screen = GLMakie.Screen(fig.scene)
+            close(screen)
+        catch e
+            @warn "Error putting nothing or closing window on Cancel: $e"
+        end
     end
 
     # Handle window closing via 'X' button
@@ -463,17 +415,17 @@ function prompt_for_ranges_makie(max_t::Int, max_z::Int, max_c::Int)
     catch e
         println("Error taking from channel (potentially closed early?): $e")
         # Ensure window is closed if take! fails or is interrupted
-         if isopen(screen)
+        if isopen(screen)
             close(screen)
-         end
-         final_result = nothing # Assume cancellation if error
+        end
+        final_result = nothing # Assume cancellation if error
     end
 
     # Check if window was closed manually (if take! didn't get a value)
-     if isempty(result_channel) && isnothing(final_result)
-         println("Window closed manually without OK/Cancel.")
-         final_result = nothing # Ensure it's nothing
-     end
+    if isempty(result_channel) && isnothing(final_result)
+        println("Window closed manually without OK/Cancel.")
+        final_result = nothing # Ensure it's nothing
+    end
 
     close(result_channel) # Close the channel
 
@@ -481,7 +433,10 @@ function prompt_for_ranges_makie(max_t::Int, max_z::Int, max_c::Int)
     # Although callbacks should handle this now
     if isopen(screen)
         println("Closing lingering screen...")
-        try; close(screen); catch; end
+        try
+            close(screen)
+        catch
+        end
     end
 
     return final_result
@@ -496,33 +451,44 @@ function main()
     selected_file = ""
     try
         selected_file = pick_file(pwd(); filterlist=filter_list)
-        if isempty(selected_file); println("File selection cancelled. Exiting."); return; end
+        if isempty(selected_file)
+            println("File selection cancelled. Exiting.")
+            return
+        end
         println("File selected: ", selected_file)
-    catch e; println("\nError during file selection dialog:"); showerror(stdout, e); println("\nExiting."); return; end
+    catch e
+        println("\nError during file selection dialog:")
+        showerror(stdout, e)
+        println("\nExiting.")
+        return
+    end
 
     # ... (Parsing metadata remains the same) ...
-     println("\nParsing selected file to determine dimensions...")
+    println("\nParsing selected file to determine dimensions...")
     local image_data
     try # ... (parsing logic) ...
-         image_data = parse_ome_companion(selected_file)
-         if isempty(image_data) #... (error check) ...
+        image_data = parse_ome_companion(selected_file)
+        if isempty(image_data) #... (error check) ...
             println("Error: Parsing failed or returned no valid tile data from selected file.")
             return
-         end
-         if !haskey(image_data[1], "metadata_size_c") # ... (error check) ...
+        end
+        if !haskey(image_data[1], "metadata_size_c") # ... (error check) ...
             println("Error: Cannot determine metadata dimensions from the first tile's data.")
             return
-         end
+        end
     catch e # ... (error check) ...
-        println("\nError parsing the selected companion file:"); showerror(stdout, e); println("\nExiting."); return;
+        println("\nError parsing the selected companion file:")
+        showerror(stdout, e)
+        println("\nExiting.")
+        return
     end
     metadata_size_t = image_data[1]["metadata_size_t"]
     metadata_size_z = image_data[1]["metadata_size_z"]
     metadata_size_c = image_data[1]["metadata_size_c"]
     println("Dimensions from Metadata: T=$metadata_size_t, Z=$metadata_size_z, C=$metadata_size_c")
     if metadata_size_t <= 0 || metadata_size_z <= 0 || metadata_size_c <= 0 # ... (error check) ...
-         println("Error: Metadata dimensions reported as zero or negative.")
-         return
+        println("Error: Metadata dimensions reported as zero or negative.")
+        return
     end
 
     # --- Prompt for ranges using the Makie GUI ---
