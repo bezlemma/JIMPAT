@@ -1,17 +1,9 @@
-# --- Align Functions ---
-function tile_using_positions(image_data, bin_factor)
-    offsets = Dict{Any,Tuple{Float64,Float64}}()
-    for tile in image_data
-        px = get(tile, "position_x", 0.0)
-        py = get(tile, "position_y", 0.0)
-        if px === missing
-            px = 0.0
-        end
-        if py === missing
-            py = 0.0
-        end
-        offsets[tile] = (Float64(px) / bin_factor, Float64(py) / bin_factor)
-    end
+function tile_using_positions(image_data::DataFrame, bin_factor)
+    # Filter rows corresponding to the reference plane (c, z, t) == (1, 1, 1)
+    ref_df = filter(row -> row.c == 1 && row.z == 1 && row.t == 1, image_data)
+    # Sort by pos_id (assumed to be numeric and unique for each tile)
+    sort!(ref_df, :pos_id)
+    offsets = [(row.x_position / bin_factor, row.y_position / bin_factor) for row in eachrow(ref_df)]
     return offsets
 end
 

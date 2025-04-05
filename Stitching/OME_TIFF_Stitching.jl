@@ -1,47 +1,56 @@
-using FileIO, EzXML, FFTW, Base.Threads, LinearAlgebra, TiffImages
+using FileIO, FFTW, Base.Threads, LinearAlgebra, TiffImages
 using Statistics, SparseArrays, OrderedCollections
 using NativeFileDialog, ProgressMeter
-using GLMakie
 
-# Assuming these files contain the necessary function definitions
 include("Stitching_Load_Functions.jl")
 include("Stitching_Fuse_Functions.jl")
 include("Stitching_Align_Functions.jl")
 include("Stitching_GUI.jl")
 include("SaveTiffPlz.jl")
 
-function main(companion_file::String, time_range::AbstractRange, z_range::AbstractRange, c_range::AbstractRange)
-    println("Using Companion File: ", companion_file)
-    base_path = dirname(companion_file)
-    image_data = parse_ome_companion(companion_file)
-    println("Parsed data for $(length(image_data)) valid tiles.")
-    metadata_size_t = image_data[1]["metadata_size_t"]
-    metadata_size_z = image_data[1]["metadata_size_z"]
-    metadata_size_c = image_data[1]["metadata_size_c"]
-
-    # --- Validate User-Provided Ranges ---
-    if maximum(time_range) > metadata_size_t || minimum(time_range) < 1
-        println("Error: Provided Time range ($(time_range)) is outside the valid metadata range (1:$(metadata_size_t)).")
-        return;    end
-    if maximum(z_range) > metadata_size_z || minimum(z_range) < 1
-        println("Error: Provided Z range ($(z_range)) is outside the valid metadata range (1:$(metadata_size_z)).")
-        return;    end
-    if maximum(c_range) > metadata_size_c || minimum(c_range) < 1
-        println("Error: Provided Channel range ($(c_range)) is outside the valid metadata range (1:$(metadata_size_c)).")
-        return;    end
+function main(companion_file::String, t_range::AbstractRange, z_range::AbstractRange, c_range::AbstractRange)
 
     # --- Parameters ---
-    align_strategy = "From Position"
-    bin_factor = 2
-    Fusion_Strategy = "None"
+    align_strategy = "From Position" #TODO: Implement global alginment
+    bin_factor = 4
+    Fusion_Strategy = "None" #TODO: Re-do "Feather"
     feather_blend_size = 30.0
 
-    offsets = tile_using_positions(image_data, bin_factor)
 
+    println("Using Companion File: ", companion_file)
+    base_path = dirname(companion_file)
+    image_data = parse_ome(companion_file)
+    meta_data = parse_ome_metadata(companion_file)
+    # --- Validate User-Provided Ranges ---
+    metadata_size_t = meta_data["SizeT"]
+    metadata_size_z = meta_data["SizeZ"]
+    metadata_size_c = meta_data["SizeC"]
+
+    if maximum(t_range) > metadata_size_t || minimum(t_range) < 1
+        println("Error: Provided Time range ($(t_range)) is outside the valid metadata range (1:$(metadata_size_t)).")
+        return
+    end
+    if maximum(z_range) > metadata_size_z || minimum(z_range) < 1
+        println("Error: Provided Z range ($(z_range)) is outside the valid metadata range (1:$(metadata_size_z)).")
+        return
+    end
+    if maximum(c_range) > metadata_size_c || minimum(c_range) < 1
+        println("Error: Provided Channel range ($(c_range)) is outside the valid metadata range (1:$(metadata_size_c)).")
+        return
+    end
+
+    #Alignment
+    if align_strategy == "From Position"
+        offsets = tile_using_positions(image_data, bin_factor)
+    else
+        println("Invalid alignment stratgy, exiting.")
+        return
+    end
+
+    #Fusion
     println("\nStarting fusion process...")
     stitched_series = fuse_main(image_data, offsets, Fusion_Strategy, base_path,
-        c_range, z_range, time_range, bin_factor,
-        metadata_size_c, metadata_size_z, metadata_size_t,
+        c_range, z_range, t_range, bin_factor,
         feather_blend_size)
 
     # --- Saving Code  ---
@@ -56,12 +65,11 @@ function main(companion_file::String, time_range::AbstractRange, z_range::Abstra
 end
 
 function main(companion_file::String)
-    println("Using Companion File: ", companion_file)
-    image_data = parse_ome_companion(companion_file)
-    metadata_size_t = image_data[1]["metadata_size_t"]
-    metadata_size_z = image_data[1]["metadata_size_z"]
-    metadata_size_c = image_data[1]["metadata_size_c"]
-    main(companion_file, 1:metadata_size_t, 1:metadata_size_z, 1:metadata_size_c)
+    meta_data = parse_ome_metadata(companion_file)
+    t_range = 1:meta_data["SizeT"]
+    z_range = 1:meta_data["SizeZ"]
+    c_range = 1:meta_data["SizeC"]
+    main(companion_file, t_range, z_range, c_range)
 end
 
 function main()
@@ -70,28 +78,9 @@ function main()
     selected_file = ""
     selected_file = pick_file(pwd(); filterlist=filter_list)
     if isempty(selected_file)
-        println("File selection cancelled. Exiting.")
         return
     end
-    println("File selected: ", selected_file)
-
-    local image_data
-    image_data = parse_ome_companion(selected_file)
-    metadata_size_t = image_data[1]["metadata_size_t"]
-    metadata_size_z = image_data[1]["metadata_size_z"]
-    metadata_size_c = image_data[1]["metadata_size_c"]
-
-    println("\nOpening GUI to select ranges (using Makie)...")
-    gui_result = prompt_for_ranges_makie(metadata_size_t, metadata_size_z, metadata_size_c)
-
-    if isnothing(gui_result)
-        println("Range selection cancelled or GUI closed. Exiting.")
-        return
-    else
-        time_range, z_range, c_range = gui_result
-        println("\nProceeding with selected file and ranges from GUI...")
-        main(selected_file, time_range, z_range, c_range) # Call the core function
-    end
+    main(selected_file)
 end
 
 #Example for running with a given file and given ranges 
@@ -104,13 +93,26 @@ end
 #base_path = raw"C:\Users\uComp\Documents\LinneaData\20250226\Sample5_1\\"
 #companion_file = base_path * "20250226_ll_sample5_60x_10msexp_1-2bint_gfp-bypass_60sint1.companion.ome"
 
-#base_path = raw"C:\Users\uComp\Downloads\sample\\"
-#companion_file = base_path * "20231113_1101_129_e14_kidney_w1_c_dapi_dba_ck8_sox9_10x2.companion.ome"
-#main(companion_file)
+base_path = raw"C:\Users\uComp\Downloads\sample\\"
+companion_file = base_path * "20231113_1101_129_e14_kidney_w1_c_dapi_dba_ck8_sox9_10x2.companion.ome"
+main(companion_file)
 
 
 ## Example for GUI run
-main()
+#main()
 
 
+#Debugging:
+#  c_range = 1:1
+#  z_range = 50:100
+#  t_range = 1:1
+#  bin_factor = 2
+#  Fusion_Strategy = "None"
+#  feather_blend_size = 30.0
 
+#  image_data = parse_ome(companion_file)
+#meta_data = parse_ome_metadata(companion_file)
+#  offsets = tile_using_positions(image_data, bin_factor)
+#  stitched_series = fuse_main(image_data, offsets, Fusion_Strategy, base_path,
+#      c_range, z_range, t_range, bin_factor,
+#      feather_blend_size)
