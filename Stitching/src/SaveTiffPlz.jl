@@ -1,10 +1,3 @@
-module TiffSaver
-
-# Using Printf for string formatting within the module
-using Printf
-
-# --- Constants (Encapsulated within the Module) ---
-
 # TIFF Tag Constants (ID, Type) - Defined as UInt16
 const TIFF_TAG_IMAGE_WIDTH = UInt16(256)
 const TIFF_TAG_IMAGE_LENGTH = UInt16(257)
@@ -45,8 +38,6 @@ function write_rational_data(io::IO, numerator::UInt32, denominator::UInt32)
     write(io, denominator)
     return UInt32(offset)
 end
-
-# --- Main Function ---
 
 """
     SaveTiffPlz(filename::String, A::AbstractArray{T, 5}) where T<:Unsigned
@@ -272,8 +263,3 @@ function SaveTiffPlz(filename::String, A::AbstractArray{T, 5}) where T<:Unsigned
     println("Successfully saved hyperstack to $filename")
     return nothing
 end
-
-# Export the main function to make it available outside the module
-export SaveTiffPlz
-
-end # module TiffSaver

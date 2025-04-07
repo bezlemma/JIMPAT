@@ -1,6 +1,9 @@
-using FileIO, FFTW, Base.Threads, LinearAlgebra, TiffImages
+module Stitching
+
+using FileIO,Printf, FFTW, Base.Threads, LinearAlgebra, TiffImages
 using Statistics, SparseArrays, OrderedCollections
 using NativeFileDialog, ProgressMeter
+using EzXML, DataFrames
 
 include("Stitching_Load_Functions.jl")
 include("Stitching_Fuse_Functions.jl")
@@ -61,7 +64,7 @@ function main(companion_file::String, t_range::AbstractRange, z_range::AbstractR
     println("Saving stitched 5D array to: $output_file")
     stitched_16 = clamp.(stitched_series, 0.0f0, 1.0f0) .* 65535.0f0
     stitched_16 = round.(UInt16, stitched_16)
-    TiffSaver.SaveTiffPlz(output_file, stitched_16)
+    SaveTiffPlz(output_file, stitched_16)
 end
 
 function main(companion_file::String)
@@ -72,15 +75,16 @@ function main(companion_file::String)
     main(companion_file, t_range, z_range, c_range)
 end
 
-function main()
+function julia_main()::Cint
     println("Opening file selection dialog...")
     filter_list = "companion.ome"
     selected_file = ""
     selected_file = pick_file(pwd(); filterlist=filter_list)
     if isempty(selected_file)
-        return
+        return 1
     end
     main(selected_file)
+    return 0
 end
 
 #Example for running with a given file and given ranges 
@@ -93,15 +97,20 @@ end
 #base_path = raw"C:\Users\uComp\Documents\LinneaData\20250226\Sample5_1\\"
 #companion_file = base_path * "20250226_ll_sample5_60x_10msexp_1-2bint_gfp-bypass_60sint1.companion.ome"
 
-base_path = raw"C:\Users\uComp\Downloads\sample\\"
-companion_file = base_path * "20231113_1101_129_e14_kidney_w1_c_dapi_dba_ck8_sox9_10x2.companion.ome"
-main(companion_file)
+#base_path = raw"C:\Users\uComp\Downloads\sample\\"
+#companion_file = base_path * "20231113_1101_129_e14_kidney_w1_c_dapi_dba_ck8_sox9_10x2.companion.ome"
+#main(companion_file)
+
+
+#base_path = raw"C:\Users\Bez\Downloads\stitching\data\sample\\"
+#companion_file = base_path * "20231113_1101_129_e14_kidney_w1_c_dapi_dba_ck8_sox9_10x2.companion.ome"
+#main(companion_file)
 
 
 ## Example for GUI run
 #main()
 
-
+end
 #Debugging:
 #  c_range = 1:1
 #  z_range = 50:100
@@ -110,7 +119,7 @@ main(companion_file)
 #  Fusion_Strategy = "None"
 #  feather_blend_size = 30.0
 
-#  image_data = parse_ome(companion_file)
+ # image_data = parse_ome(companion_file)
 #meta_data = parse_ome_metadata(companion_file)
 #  offsets = tile_using_positions(image_data, bin_factor)
 #  stitched_series = fuse_main(image_data, offsets, Fusion_Strategy, base_path,

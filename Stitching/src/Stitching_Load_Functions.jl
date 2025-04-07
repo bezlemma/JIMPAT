@@ -1,7 +1,3 @@
-using EzXML, FileIO, DataFrames
-using TiffImages
-
-
 function parse_ome(file_path::String)
     doc = readxml(file_path)
     root_el = root(doc)
