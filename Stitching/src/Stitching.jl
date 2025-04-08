@@ -11,33 +11,22 @@ export stitch # Export the primary function
 include("Stitching_Load_Functions.jl")
 include("Stitching_Fuse_Functions.jl")
 include("Stitching_Align_Functions.jl")
-include("Stitching_GUI.jl")
+#include("Stitching_GUI.jl")
 include("SaveTiffPlz.jl")
 
 # --- (Optional but recommended) Keep internal core logic separate ---
 # This function does the actual work once all parameters are known
-function _execute_stitching(
-    companion_file::String,
-    t_range::UnitRange{Int}, z_range::UnitRange{Int}, c_range::UnitRange{Int},
-    save_location::String, bin_factor::Int, align_strategy::String,
-    fusion_strategy::String, feather_blend_size::Float64
-    )
-
+function _execute_stitching(companion_file::String, t_range::UnitRange{Int}, z_range::UnitRange{Int}, c_range::UnitRange{Int},
+    save_location::String, bin_factor::Int, align_strategy::String, fusion_strategy::String, feather_blend_size::Float64)
+    #Start by giving back user their information
     println("--- Executing Stitching ---")
-    println("  Input File:        ", companion_file)
-    println("  Save Location:     ", save_location)
-    println("  Time Range (T):    ", t_range)
-    println("  Z Range:           ", z_range)
-    println("  Channel Range (C): ", c_range)
-    println("  Bin Factor:        ", bin_factor)
-    println("  Align Strategy:    ", align_strategy)
-    println("  Fusion Strategy:   ", fusion_strategy)
-    if fusion_strategy == "Feather"
-         println("  Feather Blend Size: ", feather_blend_size)
-    end
+    println("  Input File:        ", companion_file); println("  Save Location:     ", save_location);
+    println("  Time Range (T):    ", t_range); println("  Z Range:           ", z_range); println("  Channel Range (C): ", c_range);
+    println("  Bin Factor:        ", bin_factor); println("  Align Strategy:    ", align_strategy); println("  Fusion Strategy:   ", fusion_strategy);
+    if fusion_strategy == "Feather"; println("  Feather Blend Size: ", feather_blend_size); end;
     println("--------------------------")
 
-    # --- Core Processing Steps ---
+    # Algin and Fuse
     base_path = dirname(companion_file)
     image_data = parse_ome(companion_file)
     println("\nStarting alignment...")
@@ -46,7 +35,7 @@ function _execute_stitching(
     stitched_series = fuse_main(image_data, offsets, fusion_strategy, base_path,
         c_range, z_range, t_range, bin_factor, feather_blend_size)
 
-    # --- Saving ---
+    # Save
     mkpath(save_location)
     binned_str = bin_factor > 1 ? "_binned$(bin_factor)x" : ""
     fusion_str = fusion_strategy != "None" ? "_$(lowercase(fusion_strategy))" : ""
@@ -106,11 +95,7 @@ function stitch(; loadfile::Union{String, Nothing}=nothing,
     metadata_size_c = meta_data["SizeC"]
     println("Metadata dimensions: T=$(metadata_size_t), Z=$(metadata_size_z), C=$(metadata_size_c)")
 
-    # --- Resolve Other Parameters (Defaults/Parsing) ---
-
-    # Helper to parse string ranges (internal)
     function _parse_range_str(range_str, max_dim)
-        # Simplified internal version of parse_range_string logic
         range_str_l = lowercase(strip(range_str))
         if range_str_l == "all" return 1:max_dim end
         if occursin(":", range_str_l)
@@ -122,7 +107,6 @@ function stitch(; loadfile::Union{String, Nothing}=nothing,
         return start:stop
     end
 
-    # Helper to resolve range inputs (String, Range, Int, Nothing)
     function _resolve_range(val, max_dim, dim_name)
         if isnothing(val) return 1:max_dim end # Default = all
         try
@@ -164,40 +148,31 @@ function setup_argparse()
     @add_arg_table! s begin
         "--loadfile", "-l"
             help = "Path to the .companion.ome file. If omitted, a GUI picker appears."
-            arg_type = String
-            default = nothing 
+            arg_type = String; default = nothing;
         "--trange", "-t"
             help = "Time range ('all', 'N', 'N:M'). Defaults to 'all'."
-            arg_type = String
-            default = "all"
+            arg_type = String; default = "all";
         "--zrange", "-z"
             help = "Z range ('all', 'N', 'N:M'). Defaults to 'all'."
-            arg_type = String
-            default = "all"
+            arg_type = String; default = "all";
         "--crange", "-c"
             help = "Channel range ('all', 'N', 'N:M'). Defaults to 'all'."
-            arg_type = String
-            default = "all"
+            arg_type = String; default = "all";
         "--savelocation", "-s"
             help = "Save directory. Defaults to input file directory."
-            arg_type = String
-            default = nothing 
+            arg_type = String; default = nothing; 
         "--binsize", "-b"
             help = "Binning factor."
-            arg_type = Int
-            default = 4
+            arg_type = Int; default = 4;
         "--align_strategy", "-a"
             help = "Alignment strategy ('From Position')."
-            arg_type = String
-            default = "From Position"
+            arg_type = String; default = "From Position";
         "--fusion_strategy", "-f"
             help = "Fusion strategy ('None', 'Feather')."
-            arg_type = String
-            default = "None"
+            arg_type = String; default = "None";
          "--feather_blend_size"
              help = "Blend size for Feather fusion."
-             arg_type = Float64
-             default = 30.0
+             arg_type = Float64; default = 30.0;
     end
     return s
 end
@@ -222,12 +197,12 @@ function julia_main()::Cint
         stitch(; parsed_args...) # Splat the dictionary as keyword arguments
         return 0 # Success
     catch e
-        println("\n--- ERROR during stitching ---")
+        println("\n ERROR during stitching")
         return 1 # Failure
     end
 end
 
-# --- Execute main if script is run directly ---
+# Execute main if script is run directly
 if abspath(PROGRAM_FILE) == @__FILE__; julia_main(); end;
 
 end
